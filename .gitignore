@@ -1,0 +1,5 @@
+work_dirs/
+cache/
+.vscode/
+data/
+log.dec
