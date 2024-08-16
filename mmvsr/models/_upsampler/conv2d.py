@@ -1,6 +1,6 @@
 # Copyright (c) Yuhang Ye. All rights reserved.
 from logging import WARNING
-
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmengine.model import BaseModule
@@ -17,7 +17,7 @@ class Type1Upsampler(BaseModule): # BasicVSR Upsampler
         self.mid_channels = mid_channels
 
         # upsample
-        self.fusion = nn.Conv2d(mid_channels * 2, mid_channels, 1, 1, 0, bias=True)
+        self.fusion = nn.Conv2d(mid_channels + 3, mid_channels, 1, 1, 0, bias=True)
         self.upsample1 = PixelShufflePack(mid_channels, mid_channels, 2, upsample_kernel=3)
         self.upsample2 = PixelShufflePack(mid_channels, 64, 2, upsample_kernel=3)
         self.conv_hr = nn.Conv2d(64, 64, 3, 1, 1)
@@ -29,11 +29,30 @@ class Type1Upsampler(BaseModule): # BasicVSR Upsampler
 
     def forward(self, feats, lrs):
         
-        feats = self.lrelu(self.fusion(feats))
-        feats = self.lrelu(self.upsample1(feats))
-        feats = self.lrelu(self.upsample2(feats))
-        feats = self.lrelu(self.conv_hr(feats))
-        feats = self.conv_last(feats)
-        feats += self.img_upsample(lrs)
-        
-        return feats
+        B, T, C, H, W = feats.size()
+        output = []
+
+        for i in range(T):
+            # Extract features and low-resolution images for the current time step
+            current_feats = feats[:, i, :, :, :]
+            current_lrs = lrs[:, i, :, :, :]
+
+            # Apply the fusion layer on concatenated features and low-resolution images
+            combined = torch.cat([current_feats, current_lrs], dim=1)
+            x = self.lrelu(self.fusion(combined))
+
+            # Perform sequential upsampling
+            x = self.lrelu(self.upsample1(x))
+            x = self.lrelu(self.upsample2(x))
+            x = self.lrelu(self.conv_hr(x))
+            x = self.conv_last(x)
+
+            # Upsample the low-resolution image for residual learning and add to the final high-resolution output
+            upsampled_lrs = self.img_upsample(current_lrs)
+            x += upsampled_lrs
+
+            # Append the result for this time step
+            output.append(x)
+
+        # Stack along the time dimension
+        return torch.stack(output, dim=1)
