@@ -8,6 +8,7 @@ from mmvsr.models.archs import ResidualBlockNoBN
 from mmvsr.models.utils import flow_warp, make_layer
 from mmvsr.registry import MODELS
 
+from collections import deque
 @MODELS.register_module()
 class FirstOrderRecurrentPropagator(BaseModule):
     
@@ -46,30 +47,31 @@ class FirstOrderRecurrentPropagator(BaseModule):
 
         self.is_first = False
 
-    def forward(self, feats, flows, prev_feats=[], feat_indices=None):
-
-        if self.is_first:
-            self._initialize_submodules(prev_feats, device=feats.device)
+    def forward(self, feats, flows, prev_feats=[]):
 
         n, t, c, h, w = feats.size()
 
-        feat_indices = list(range(t - 1, -1, -1)) if self.is_reversed else list(range(t))
-        flow_indices = list(range(t - 2, -1, -1)) if self.is_reversed else list(range(t - 1))
+        if self.is_first:
+            self._initialize_submodules(prev_feats, device=feats.device)
+            self.feat_indices = list(range(-1, -t-1, -1)) if self.is_reversed else list(range(t))
 
-        outputs = []
+        outputs = deque()
         feat_prop = feats.new_zeros(n, self.mid_channels, h, w)
 
         for i in range(0, t):
-            curr_feat = feats[:, feat_indices[i], :, :, :]
+            curr_feat = feats[:, self.feat_indices[i], :, :, :]
             if i > 0:  # no warping required for the first timestep [0]
-                flow = flows[:, flow_indices[i - 1], :, :, :]
+                flow = flows[:, self.feat_indices[i - 1], :, :, :]
                 feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
 
-            feat_prop = torch.cat([curr_feat, feat_prop, *[it[:, feat_indices[i], :, :, :] 
+            feat_prop = torch.cat([curr_feat, feat_prop, *[it[:, self.feat_indices[i], :, :, :] 
                                                                 for it in prev_feats]], dim=1)
             feat_prop = self.fextor(feat_prop)
 
-            outputs.append(feat_prop)
+            if self.is_reversed:
+                outputs.appendleft(feat_prop)
+            else:
+                outputs.append(feat_prop)
 
         return torch.stack(outputs, dim=1)
 
