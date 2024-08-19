@@ -11,12 +11,16 @@ from mmvsr.registry import MODELS
 @MODELS.register_module()
 class FirstOrderRecurrentPropagator(BaseModule):
     
-    def __init__(self, mid_channels=64, num_blocks=30, fextor_def=None, aligner_def=None):
+    def __init__(self, mid_channels=64, num_blocks=30, 
+                 fextor_def=None, aligner_def=None,
+                 is_reversed=False):
 
         super().__init__()
 
         self.mid_channels = mid_channels
         self.num_blocks = num_blocks
+
+        self.is_reversed = is_reversed
 
         # Function definitions or classes to create fextor and aligner
         self.fextor_def = fextor_def if fextor_def is not None else ResidualBlocksWithInputConv
@@ -29,36 +33,40 @@ class FirstOrderRecurrentPropagator(BaseModule):
         self.is_first = True
 
 
-    def _initialize_submodules(self, prev_feats):
+    def _initialize_submodules(self, prev_feats, device):
 
         # This is to mimic the Dense Connection
         input_channels = (2 + len(prev_feats)) * self.mid_channels
         
         if self.fextor is None:
-            self.fextor = self.fextor_def(input_channels, self.mid_channels, self.num_blocks).cuda()
+            self.fextor = self.fextor_def(input_channels, self.mid_channels, self.num_blocks).to(device)
 
         if self.aligner is None:
-            self.aligner = self.aligner_def().cuda()
+            self.aligner = self.aligner_def().to(device)
 
         self.is_first = False
 
-    def forward(self, feats, flows, prev_feats=[]):
+    def forward(self, feats, flows, prev_feats=[], feat_indices=None):
 
         if self.is_first:
-            self._initialize_submodules(prev_feats)
+            self._initialize_submodules(prev_feats, device=feats.device)
 
         n, t, c, h, w = feats.size()
+
+        feat_indices = list(range(t - 1, -1, -1)) if self.is_reversed else list(range(t))
+        flow_indices = list(range(t - 2, -1, -1)) if self.is_reversed else list(range(t - 1))
 
         outputs = []
         feat_prop = feats.new_zeros(n, self.mid_channels, h, w)
 
         for i in range(0, t):
-            curr_feat = feats[:, i, :, :, :]
+            curr_feat = feats[:, feat_indices[i], :, :, :]
             if i > 0:  # no warping required for the first timestep [0]
-                flow = flows[:, i - 1, :, :, :]
+                flow = flows[:, flow_indices[i - 1], :, :, :]
                 feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
 
-            feat_prop = torch.cat([curr_feat, feat_prop, *[it[:, i, :, :, :] for it in prev_feats]], dim=1)
+            feat_prop = torch.cat([curr_feat, feat_prop, *[it[:, feat_indices[i], :, :, :] 
+                                                                for it in prev_feats]], dim=1)
             feat_prop = self.fextor(feat_prop)
 
             outputs.append(feat_prop)

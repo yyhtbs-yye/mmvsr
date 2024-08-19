@@ -1,7 +1,7 @@
 
 import os
 
-cuda_id = 2
+cuda_id = 9
 cfg_path = "configs/n_to_n_vsr.py"
 
 model_configs = dict(type='BasicVSRImpl', mid_channels=16, num_blocks=30,
@@ -21,7 +21,7 @@ cfg.model['generator'].update(**model_configs)
 # Below will not work, as they are not modified in settings but as global variables. 
 cfg.train_dataloader['dataset']['num_input_frames'] = 7
 cfg.val_dataloader['dataset']['num_input_frames'] = 7
-cfg.work_dir = './work_dirs/BlsasicVSRPlusPlusNet'
+cfg.work_dir = './work_dirs/BasicVSRPlusPlusNet'
 runner = Runner.from_cfg(cfg)
 
 runner.train()

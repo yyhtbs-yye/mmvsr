@@ -27,7 +27,7 @@ class BasicVSRImpl(BaseModule):
         self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
 
         # Recurrent propagators
-        self.back_propagator = FirstOrderRecurrentPropagator(mid_channels, num_blocks)
+        self.back_propagator = FirstOrderRecurrentPropagator(mid_channels, num_blocks, is_reversed=True)
         self.forward_propagator = FirstOrderRecurrentPropagator(mid_channels, num_blocks)
 
         self.feat_extract = ResidualBlocksWithInputConv(3, mid_channels, 5)
@@ -40,33 +40,32 @@ class BasicVSRImpl(BaseModule):
         lrs_1 = lrs[:, :-1, :, :, :].reshape(-1, c, h, w)
         lrs_2 = lrs[:, 1:, :, :, :].reshape(-1, c, h, w)
 
-        flows_backward = self.spynet(lrs_1, lrs_2).view(n, t - 1, 2, h, w)
-        flows_forward = self.spynet(lrs_2, lrs_1).view(n, t - 1, 2, h, w)
+        backward_flows = self.spynet(lrs_1, lrs_2).view(n, t - 1, 2, h, w)
+        forward_flows = self.spynet(lrs_2, lrs_1).view(n, t - 1, 2, h, w)
 
-        return flows_forward, flows_backward
+        return forward_flows, backward_flows
 
     def forward(self, lrs):
 
         n, t, c, h, w = lrs.size()
 
         # compute optical flow
-        flows_forward, flows_backward = self.compute_flow(lrs)
+        forward_flows, backward_flows = self.compute_flow(lrs)
 
         feats_ = self.feat_extract(lrs.view(-1, c, h, w))
         feats_ = feats_.view(n, t, -1, h, w)
 
-        # Run the backward and forward propagation
-        back_feats = self.back_propagator(feats_, flows_backward, [feats_])
-
-        inverted_feats = torch.flip(feats_, dims=[1])
-        inverted_back_feats = torch.flip(back_feats, dims=[1])
+        # According to BasicVSRNet:
+        # `back_propagator` is done first, then `forward_propagator`. 
 
         # Run the forward propagation with inverted order of features
-        forward_feats = self.forward_propagator(inverted_back_feats, flows_forward, 
-                                                [inverted_feats, inverted_back_feats])
+        backward_feats = self.back_propagator(feats_, backward_flows, 
+                                              [feats_])
 
-        # Invert the order of frames in forward_feats back to original after processing
-        forward_feats = torch.flip(forward_feats, dims=[1])
+        # Run the backward and forward propagation
+        forward_feats = self.forward_propagator(backward_feats, forward_flows, 
+                                                [feats_, backward_feats])
+
 
         out = self.feat_upsampler(forward_feats, lrs)
 
