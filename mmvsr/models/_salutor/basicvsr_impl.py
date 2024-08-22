@@ -7,8 +7,10 @@ from mmengine.model import BaseModule
 from mmvsr.registry import MODELS
 
 from mmvsr.models._motion_estimator.spynet import  SPyNet
-from mmvsr.models._temporal_propagator.first_order_recurrent import FirstOrderRecurrentPropagator, ResidualBlocksWithInputConv
+from mmvsr.models._temporal_propagator.first_order_recurrent import FirstOrderRecurrentPropagator, ResidualBlocksWithInputConv, Alignment
 from mmvsr.models._upsampler.conv2d import Type1Upsampler
+
+from mmvsr.models.archs import PixelShufflePack, ResidualBlockNoBN
 
 @MODELS.register_module()
 class BasicVSRImpl(BaseModule):
@@ -20,19 +22,31 @@ class BasicVSRImpl(BaseModule):
         self.mid_channels = mid_channels
         self.num_blocks = num_blocks
 
-        # optical flow network for feature alignment
-        self.spynet = SPyNet(pretrained=spynet_pretrained)
-
-        # activation function
-        self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
-
         # Recurrent propagators
-        self.back_propagator = FirstOrderRecurrentPropagator(mid_channels, num_blocks, is_reversed=True)
+        # self.back_propagator = FirstOrderRecurrentPropagator(mid_channels, num_blocks, is_reversed=True)
         self.forward_propagator = FirstOrderRecurrentPropagator(mid_channels, num_blocks)
 
-        self.feat_extract = ResidualBlocksWithInputConv(3, mid_channels, 5)
+        self.aligner = Alignment()
+        self.backward_resblocks = ResidualBlocksWithInputConv(
+            mid_channels + 3, mid_channels, num_blocks)
+        self.forward_resblocks = ResidualBlocksWithInputConv(
+            mid_channels + 3, mid_channels, num_blocks)
 
-        self.feat_upsampler = Type1Upsampler(mid_channels)
+        # upsample
+        self.fusion = nn.Conv2d(
+            mid_channels * 2, mid_channels, 1, 1, 0, bias=True)
+        self.upsample1 = PixelShufflePack(
+            mid_channels, mid_channels, 2, upsample_kernel=3)
+        self.upsample2 = PixelShufflePack(
+            mid_channels, 64, 2, upsample_kernel=3)
+        self.conv_hr = nn.Conv2d(64, 64, 3, 1, 1)
+        self.conv_last = nn.Conv2d(64, 3, 3, 1, 1)
+        self.img_upsample = nn.Upsample(
+            scale_factor=4, mode='bilinear', align_corners=False)
+        self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
+
+        # optical flow network for feature alignment
+        self.spynet = SPyNet(pretrained=spynet_pretrained)
 
     def compute_flow(self, lrs):
 
@@ -52,22 +66,79 @@ class BasicVSRImpl(BaseModule):
         # compute optical flow
         forward_flows, backward_flows = self.compute_flow(lrs)
 
-        feats_ = self.feat_extract(lrs.view(-1, c, h, w))
-        feats_ = feats_.view(n, t, -1, h, w)
-
         # According to BasicVSRNet:
         # `back_propagator` is done first, then `forward_propagator`. 
 
-        # Run the forward propagation with inverted order of features
-        backward_feats = self.back_propagator(feats_, backward_flows, 
-                                              [feats_])
+        backward_prop_feats = []
+        feat_prop = lrs.new_zeros(n, self.mid_channels, h, w)
+        for i in range(t - 1, -1, -1):
+            if i < t - 1:  # no warping required for the last timestep
+                flow = backward_flows[:, i, :, :, :]
+                feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
+
+            feat_prop = torch.cat([lrs[:, i, :, :, :], feat_prop], dim=1)
+            feat_prop = self.backward_resblocks(feat_prop)
+
+            backward_prop_feats.append(feat_prop)
+        backward_prop_feats = backward_prop_feats[::-1]
+
+        # backward_feats = torch.stack(backward_prop_feats, dim=1)
 
         # Run the backward and forward propagation
-        forward_feats = self.forward_propagator(backward_feats, forward_flows, 
-                                                [feats_, backward_feats])
+        # forward_feats = self.forward_propagator(lrs, forward_flows, [])
+
+        final_prop_feats = []
+        forward_prop_feats = []
+
+        # feats = torch.cat([backward_feats, forward_feats], dim=2)
+
+        feat_prop = torch.zeros_like(feat_prop)
+
+        for i in range(t):
+
+            lr_curr = lrs[:, i, :, :, :]
+            if i > 0:  # no warping required for the first timestep
+                if forward_flows is not None:
+                    flow = forward_flows[:, i - 1, :, :, :]
+                else:
+                    flow = forward_flows[:, -i, :, :, :]
+                feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
+
+            feat_prop = torch.cat([lr_curr, feat_prop], dim=1)
+            feat_prop = self.forward_resblocks(feat_prop)
+
+            forward_prop_feats.append(feat_prop)
+
+        for i in range(t):
+
+            # Extract features and low-resolution images for the current time step
+            current_feats = torch.cat((backward_prop_feats[i], forward_prop_feats[i]), dim=1) # feats[:, i, :, :, :]
+            current_lrs = lrs[:, i, :, :, :]
+
+            # Apply the fusion layer on concatenated features and low-resolution images
+            x = self.lrelu(self.fusion(current_feats))
+
+            # Perform sequential upsampling
+            x = self.lrelu(self.upsample1(x))
+            x = self.lrelu(self.upsample2(x))
+            x = self.lrelu(self.conv_hr(x))
+            x = self.conv_last(x)
+
+            # Upsample the low-resolution image for residual learning and add to the final high-resolution output
+            upsampled_lrs = self.img_upsample(current_lrs)
+            x += upsampled_lrs
+
+            # Append the result for this time step
+            final_prop_feats.append(x)
+
+        return torch.stack(final_prop_feats, dim=1)
 
 
-        out = self.feat_upsampler(forward_feats, lrs)
+if __name__ == '__main__':
+    tensor_filepath = "/workspace/mmvsr/test_input_tensor.pt"
+    input_tensor = torch.load('test_input_tensor.pt') / 100
+    model = BasicVSRImpl(mid_channels=4, num_blocks=1, spynet_pretrained='https://download.openmmlab.com/mmediting/restorers/'
+                     'basicvsr/spynet_20210409-c6c1bd09.pth')
 
-        return out
+    output1 = model(input_tensor)
 

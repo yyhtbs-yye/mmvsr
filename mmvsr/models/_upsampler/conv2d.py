@@ -10,14 +10,14 @@ from mmvsr.registry import MODELS
 
 @MODELS.register_module()
 class Type1Upsampler(BaseModule): # BasicVSR Upsampler
-    def __init__(self, mid_channels=64):
+    def __init__(self, in_channels, mid_channels=64):
 
         super().__init__()
 
         self.mid_channels = mid_channels
 
         # upsample
-        self.fusion = nn.Conv2d(mid_channels + 3, mid_channels, 1, 1, 0, bias=True)
+        self.fusion = nn.Conv2d(in_channels, mid_channels, 1, 1, 0, bias=True)
         self.upsample1 = PixelShufflePack(mid_channels, mid_channels, 2, upsample_kernel=3)
         self.upsample2 = PixelShufflePack(mid_channels, 64, 2, upsample_kernel=3)
         self.conv_hr = nn.Conv2d(64, 64, 3, 1, 1)
@@ -38,8 +38,7 @@ class Type1Upsampler(BaseModule): # BasicVSR Upsampler
             current_lrs = lrs[:, i, :, :, :]
 
             # Apply the fusion layer on concatenated features and low-resolution images
-            combined = torch.cat([current_feats, current_lrs], dim=1)
-            x = self.lrelu(self.fusion(combined))
+            x = self.lrelu(self.fusion(current_feats))
 
             # Perform sequential upsampling
             x = self.lrelu(self.upsample1(x))

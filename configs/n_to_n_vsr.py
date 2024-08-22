@@ -9,7 +9,7 @@ model_configs = dict(mid_channels=64,
 
 loss_name = 'CharbonnierLoss'
 train_iter = 300_000
-val_interval = 1_000
+val_interval = 100
 train_on_patch = False
 gt_patch_size = 256
 work_dir = f'./work_dirs/{model_name}'

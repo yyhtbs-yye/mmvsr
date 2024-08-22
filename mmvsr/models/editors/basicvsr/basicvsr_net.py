@@ -38,9 +38,6 @@ class BasicVSRNet(BaseModule):
 
         self.mid_channels = mid_channels
 
-        # optical flow network for feature alignment
-        self.spynet = SPyNet(pretrained=spynet_pretrained)
-
         # propagation branches
         self.backward_resblocks = ResidualBlocksWithInputConv(
             mid_channels + 3, mid_channels, num_blocks)
@@ -63,6 +60,12 @@ class BasicVSRNet(BaseModule):
         self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
 
         self._raised_warning = False
+
+        # for param in self.parameters():
+        #     nn.init.constant_(param, 1)
+
+        # optical flow network for feature alignment
+        self.spynet = SPyNet(pretrained=spynet_pretrained)
 
     def check_if_mirror_extended(self, lrs):
         """Check whether the input is a mirror-extended sequence.
@@ -408,3 +411,13 @@ class SPyNetBasicModule(BaseModule):
             Tensor: Refined flow with shape (b, 2, h, w)
         """
         return self.basic_module(tensor_input)
+
+
+if __name__ == '__main__':
+    tensor_filepath = "/workspace/mmvsr/test_input_tensor.pt"
+    input_tensor = torch.load('test_input_tensor.pt') / 100
+    model = BasicVSRNet(mid_channels=4, num_blocks=1, spynet_pretrained='https://download.openmmlab.com/mmediting/restorers/'
+                     'basicvsr/spynet_20210409-c6c1bd09.pth')
+
+    output1 = model(input_tensor)
+
