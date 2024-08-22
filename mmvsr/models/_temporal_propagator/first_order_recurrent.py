@@ -13,50 +13,33 @@ C_DIM = -3
 @MODELS.register_module()
 class FirstOrderRecurrentPropagator(BaseModule):
     
-    def __init__(self, mid_channels=64, num_blocks=30, 
+    def __init__(self, mid_channels=64, n_frames=7,
                  fextor_def=None, aligner_def=None,
+                 fextor_args=None,
                  is_reversed=False):
 
         super().__init__()
 
         self.mid_channels = mid_channels
-        self.num_blocks = num_blocks
 
         self.is_reversed = is_reversed
 
+        if fextor_def is None:
+            fextor_def = ResidualBlocksWithInputConv
+            fextor_args = dict(in_channels=mid_channels+3, out_channels=mid_channels, num_blocks=30)
+        if aligner_def is None:
+            aligner_def = Alignment
+
         # Function definitions or classes to create fextor and aligner
-        self.fextor_def = fextor_def if fextor_def is not None else ResidualBlocksWithInputConv
-        self.aligner_def = aligner_def if aligner_def is not None else Alignment
-
-        # Placeholders for dynamically created modules
-        self.fextor = None
-        self.aligner = None
-
-        self.is_first = True
-
-
-    def _initialize_submodules(self, curr_feats, prev_feats, device):
-
-        # This is to mimic the Dense Connection
-        input_channels = self.mid_channels + sum([it.shape[C_DIM] for it in prev_feats]) + curr_feats.shape[C_DIM]
-        
-        if self.fextor is None:
-            self.fextor = self.fextor_def(input_channels, self.mid_channels, self.num_blocks).to(device)
-
-        if self.aligner is None:
-            self.aligner = self.aligner_def().to(device)
-
-        self.is_first = False
+        self.fextor = fextor_def(**fextor_args)
+        self.aligner = aligner_def()
+        self.feat_indices = list(range(-1, -n_frames - 1, -1)) \
+                                if self.is_reversed \
+                                    else list(range(n_frames))
 
     def forward(self, curr_feats, flows, prev_feats=[]):
 
         n, t, c, h, w = curr_feats.size()
-
-        if self.is_first:
-            self._initialize_submodules(curr_feats, prev_feats, device=curr_feats.device)
-            self.feat_indices = list(range(-1, -t - 1, -1)) \
-                                    if self.is_reversed \
-                                        else list(range(t))
 
         outputs = list()
         feat_prop = curr_feats.new_zeros(n, self.mid_channels, h, w)

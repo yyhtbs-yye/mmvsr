@@ -23,8 +23,8 @@ class BasicVSRImpl(BaseModule):
         self.num_blocks = num_blocks
 
         # Recurrent propagators
-        self.backward_propagator = FirstOrderRecurrentPropagator(mid_channels, num_blocks, is_reversed=True)
-        self.forward_propagator = FirstOrderRecurrentPropagator(mid_channels, num_blocks)
+        self.backward_propagator = FirstOrderRecurrentPropagator(mid_channels, is_reversed=True)
+        self.forward_propagator = FirstOrderRecurrentPropagator(mid_channels)
 
         self.aligner = Alignment()
         self.backward_resblocks = ResidualBlocksWithInputConv(
@@ -72,34 +72,34 @@ class BasicVSRImpl(BaseModule):
         backward_prop_feats = []
         forward_prop_feats = []
 
-        # backward_prop_feats = self.backward_propagator(lrs.clone(), backward_flows, [])
+        backward_prop_feats = self.backward_propagator(lrs, backward_flows, [])
 
-        feat_prop = lrs.new_zeros(n, self.mid_channels, h, w)
-        feat_indices = list(range(-1, -t - 1, -1))
-        for i in range(t):
-            if i > 0:  # no warping required for the last timestep
-                flow = backward_flows[:, feat_indices[i - 1], :, :, :]
-                feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
+        # feat_prop = lrs.new_zeros(n, self.mid_channels, h, w)
+        # feat_indices = list(range(-1, -t - 1, -1))
+        # for i in range(t):
+        #     if i > 0:  # no warping required for the last timestep
+        #         flow = backward_flows[:, feat_indices[i - 1], :, :, :]
+        #         feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
 
-            feat_prop = torch.cat([lrs[:, feat_indices[i], :, :, :], feat_prop], dim=1)
-            feat_prop = self.backward_resblocks(feat_prop)
+        #     feat_prop = torch.cat([lrs[:, feat_indices[i], :, :, :], feat_prop], dim=1)
+        #     feat_prop = self.backward_resblocks(feat_prop)
 
-            backward_prop_feats.append(feat_prop)
-        backward_prop_feats = backward_prop_feats[::-1]
+        #     backward_prop_feats.append(feat_prop)
+        # backward_prop_feats = backward_prop_feats[::-1]
 
-        # forward_prop_feats = self.forward_propagator(lrs.clone(), forward_flows, [])
+        forward_prop_feats = self.forward_propagator(lrs, forward_flows, [])
 
-        feat_prop = lrs.new_zeros(n, self.mid_channels, h, w)
-        feat_indices = list(range(0, t, 1))
-        for i in range(t):
-            if i > 0:  # no warping required for the first timestep
-                flow = forward_flows[:, feat_indices[i - 1], :, :, :]
-                feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
+        # feat_prop = lrs.new_zeros(n, self.mid_channels, h, w)
+        # feat_indices = list(range(0, t, 1))
+        # for i in range(t):
+        #     if i > 0:  # no warping required for the first timestep
+        #         flow = forward_flows[:, feat_indices[i - 1], :, :, :]
+        #         feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
 
-            feat_prop = torch.cat([lrs[:, feat_indices[i], :, :, :], feat_prop], dim=1)
-            feat_prop = self.forward_resblocks(feat_prop)
+        #     feat_prop = torch.cat([lrs[:, feat_indices[i], :, :, :], feat_prop], dim=1)
+        #     feat_prop = self.forward_resblocks(feat_prop)
 
-            forward_prop_feats.append(feat_prop)
+        #     forward_prop_feats.append(feat_prop)
 
         for i in range(t):
 
