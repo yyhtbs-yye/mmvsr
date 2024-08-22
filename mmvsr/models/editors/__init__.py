@@ -19,7 +19,7 @@ from .swinir import SwinIRNet
 from .tdan import TDAN, TDANNet
 from .tof import TOFlowVFINet, TOFlowVSRNet, ToFResBlock
 
-from .rvrt import RVRTNet
+# from ._rvrt import RVRTNet
 from .d3dnet import D3DNet
 from .ftvsr import FTVSRNet
 from .iart import IARTNet
@@ -42,6 +42,6 @@ __all__ = [
     'BasicVSR', 'BasicVSRNet', 'BasicVSRPlusPlusNet', 'EDSRNet', 'EDVR', 'EDVRNet', 'ESRGAN', 'RRDBNet', 'IconVSRNet', 'MaskConvModule', 'PartialConv2d', 'PConvDecoder', 'PConvEncoder',
                     'PConvEncoderDecoder', 'PConvInpaintor', 'RDNNet', 'RealBasicVSR', 'RealBasicVSRNet', 'RealESRGAN', 'UNetDiscriminatorWithSpectralNorm', 'SRCNNNet',
                     'SRGAN', 'ModifiedVGG', 'MSRResNet', 'SwinIRNet', 'TDAN', 'TDANNet', 'TOFlowVFINet', 'TOFlowVSRNet', 'ToFResBlock',
-    'RVRTNet', 'VRTNet', 'NaiveVSR', 'D3DNet', 'FTVSRNet', 'IARTNet', 'PSRTRecurrentNet', 'FSTRNet', 
+    'VRTNet', 'NaiveVSR', 'D3DNet', 'FTVSRNet', 'IARTNet', 'PSRTRecurrentNet', 'FSTRNet', 
     'D3DUNet', 'D2DNet', 'De3QNet', 'BaselineVSRNet', 'BisimVSRPlusPlusNet', 'BaselineVSRPlusPlusNet', 
 ]

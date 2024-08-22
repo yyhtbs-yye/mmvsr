@@ -1,7 +1,7 @@
 
 import os
 
-cuda_id = 8
+cuda_id = 2
 cfg_path = "configs/n_to_n_vsr.py"
 
 model_configs = dict(type='BasicVSRNet', mid_channels=16, num_blocks=30,

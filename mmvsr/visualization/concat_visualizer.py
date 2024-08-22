@@ -11,7 +11,6 @@ from mmvsr.registry import VISUALIZERS
 from mmvsr.structures import DataSample
 from mmvsr.utils import print_colored_log
 
-
 @VISUALIZERS.register_module()
 class ConcatImageVisualizer(Visualizer):
     """Visualize multiple images by concatenation.

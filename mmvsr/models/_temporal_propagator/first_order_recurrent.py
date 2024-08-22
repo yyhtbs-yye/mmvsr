@@ -57,8 +57,6 @@ class FirstOrderRecurrentPropagator(BaseModule):
             self.feat_indices = list(range(-1, -t - 1, -1)) \
                                     if self.is_reversed \
                                         else list(range(t))
-            # for param in self.parameters():
-            #     nn.init.constant_(param, 1)
 
         outputs = list()
         feat_prop = curr_feats.new_zeros(n, self.mid_channels, h, w)
@@ -74,12 +72,12 @@ class FirstOrderRecurrentPropagator(BaseModule):
             
             feat_prop = self.fextor(feat_prop)
 
-            outputs.append(feat_prop)
+            outputs.append(feat_prop.clone())
 
         if self.is_reversed:
             outputs = outputs[::-1]
 
-        return torch.stack(outputs, dim=1)
+        return outputs
 
 class Alignment(BaseModule):
     def __init__(self):

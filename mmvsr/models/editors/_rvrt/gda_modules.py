@@ -15,10 +15,9 @@ deform_attn_ext = load(
     'deform_attn',
     sources=[
         os.path.join(module_path, 'deform_attn_ext.cpp'),
-        os.path.join(module_path, 'deform_attn_cuda_pt110.cpp' if LooseVersion(torch.__version__) >= LooseVersion(
-            '1.10.0') else 'deform_attn_cuda_pt109.cpp'),
+        os.path.join(module_path, 'deform_attn_cuda_pt110.cpp' if LooseVersion(torch.__version__) >= LooseVersion('1.10.0') else 'deform_attn_cuda_pt109.cpp'),
         os.path.join(module_path, 'deform_attn_cuda_kernel.cu'),
-],
+    ],
 )
 
 
