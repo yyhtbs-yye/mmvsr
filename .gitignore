@@ -3,3 +3,5 @@ cache/
 .vscode/
 data/
 log.dec
+*.pt
+*.pyc
