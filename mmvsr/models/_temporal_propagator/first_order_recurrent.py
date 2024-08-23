@@ -48,10 +48,12 @@ class FirstOrderRecurrentPropagator(BaseModule):
             curr_feat = curr_feats[:, self.feat_indices[i], :, :, :]
             if i > 0:
                 flow = flows[:, self.feat_indices[i - 1], :, :, :]
-                feat_align = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
+                feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
 
-            feat_cat = torch.cat([curr_feat, feat_align, *[it[:, self.feat_indices[i], ...] for it in prev_feats]], dim=C_DIM)
-            feat_prop = self.fextor(feat_cat)
+            feat_prop = torch.cat([curr_feat, feat_prop, *[it[:, self.feat_indices[i], :, :, :] 
+                                                                for it in prev_feats]], dim=C_DIM)
+            
+            feat_prop = self.fextor(feat_prop)
 
             outputs.append(feat_prop.clone())
 

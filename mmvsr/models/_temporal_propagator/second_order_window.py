@@ -11,7 +11,7 @@ from mmvsr.registry import MODELS
 C_DIM = -3
 
 @MODELS.register_module()
-class SecondOrderRecurrentPropagator(BaseModule):
+class SecondOrderWindowPropagator(BaseModule):
     
     def __init__(self, mid_channels=64, n_frames=7,
                  fextor_def=None, fextor_args=None,
@@ -44,36 +44,34 @@ class SecondOrderRecurrentPropagator(BaseModule):
         n, t, c, h, w = curr_feats.size()
 
         out_feats = list()
-        prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
-        align_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
-        n1_feat = prop_feat
+        # prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
+        # align_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
 
         for i in range(0, t):
-            
             curr_feat = curr_feats[:, self.feat_indices[i], ...]
+            # ----------------------Initialization-----------------------
+            n1_flow = torch.zeros_like(flows[:, 0, ...])
+            n1_feat = torch.zeros_like(curr_feat)
+            n1_cond = torch.zeros_like(curr_feat)
+            # ----------------------Initialization-----------------------
+            n2_flow = torch.zeros_like(n1_flow)
+            n2_feat = torch.zeros_like(curr_feat)
+            n2_cond = torch.zeros_like(curr_feat)
+
             if i > 0:
                 n1_flow = flows[:, self.feat_indices[i - 1], ...]
-                n1_cond = self.warper(prop_feat, n1_flow.permute(0, 2, 3, 1))
-                
-                n2_feat = torch.zeros_like(prop_feat)
-                n2_flow = torch.zeros_like(n1_flow)
-                n2_cond = torch.zeros_like(n1_cond)
+                n1_feat = curr_feats[:, self.feat_indices[i - 1], ...] 
+                n1_cond = self.warper(n1_feat, n1_flow.permute(0, 2, 3, 1))
+
                 if i > 1:
-                    n2_flow = flows[:, self.feat_indices[i - 2], :, :, :]
-                    # Compute second-order optical flow using first-order flow.
+                    n2_flow = flows[:, self.feat_indices[i - 2], ...]
                     n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
-                    n2_feat = out_feats[-2] # The position of 'n-2' to match 'n'
+                    n2_feat = curr_feats[:, self.feat_indices[i - 2], ...]
                     n2_cond = self.warper(n2_feat, n2_flow.permute(0, 2, 3, 1))
 
-                # Concatenate conditions for deformable convolution.
-                n12c_cond = torch.cat([n1_cond, curr_feat, n2_cond], dim=1)
-                # Concatenate features for deformable convolution.
-                n12_feat = torch.cat([n1_feat, n2_feat], dim=1)
-                # Use deformable convolution to refine the offset (coarse='n1_flow','n2_flow'),
-                # then apply it to align 'prop_feat'
-                align_feat = self.aligner(n12_feat, n12c_cond, [n1_flow, n2_flow])
-
-            # DenseNet: Concatenate the current frame's features with those propagated from all previous layers.
+            n12c_cond = torch.cat([n1_cond, n2_cond, curr_feat], dim=1)
+            n12_feat = torch.cat([n1_feat, n2_feat], dim=1)
+            align_feat = self.aligner(n12_feat, n12c_cond, [n1_flow, n2_flow])
             cat_feat = torch.cat([curr_feat, align_feat, *[it[:, self.feat_indices[i], ...] for it in prev_feats]], dim=C_DIM)
             prop_feat = self.fextor(cat_feat)
 
@@ -83,7 +81,6 @@ class SecondOrderRecurrentPropagator(BaseModule):
             out_feats = out_feats[::-1]
 
         return torch.stack(out_feats, dim=1)
-
 
 class SecondOrderAligner(BaseModule):
     def __init__(self):
