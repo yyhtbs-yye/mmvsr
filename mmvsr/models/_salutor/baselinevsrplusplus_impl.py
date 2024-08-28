@@ -132,22 +132,6 @@ from mmengine.model.weight_init import constant_init
 from mmcv.ops import ModulatedDeformConv2d, modulated_deform_conv2d
 
 class SecondOrderDeformableAlignment(ModulatedDeformConv2d):
-    """Second-order deformable alignment module.
-
-    Args:
-        in_channels (int): Same as nn.Conv2d.
-        out_channels (int): Same as nn.Conv2d.
-        kernel_size (int or tuple[int]): Same as nn.Conv2d.
-        stride (int or tuple[int]): Same as nn.Conv2d.
-        padding (int or tuple[int]): Same as nn.Conv2d.
-        dilation (int or tuple[int]): Same as nn.Conv2d.
-        groups (int): Same as nn.Conv2d.
-        bias (bool or str): If specified as `auto`, it will be decided by the
-            norm_cfg. Bias will be set as True if norm_cfg is None, otherwise
-            False.
-        max_residue_magnitude (int): The maximum magnitude of the offset
-            residue (Eq. 6 in paper). Default: 10.
-    """
 
     def __init__(self, *args, **kwargs):
         self.max_residue_magnitude = kwargs.pop('max_residue_magnitude', 10)
@@ -195,13 +179,3 @@ class SecondOrderDeformableAlignment(ModulatedDeformConv2d):
         return modulated_deform_conv2d(x, offset, mask, self.weight, self.bias,
                                        self.stride, self.padding, self.dilation, 
                                        self.groups, self.deform_groups)
-
-
-if __name__ == '__main__':
-    tensor_filepath = "/workspace/mmvsr/test_input_tensor.pt"
-    input_tensor = torch.load('test_input_tensor.pt') / 100
-    model = BasicVSRPlusPlusImpl(mid_channels=4, num_blocks=1, spynet_pretrained='https://download.openmmlab.com/mmediting/restorers/'
-                     'basicvsr/spynet_20210409-c6c1bd09.pth')
-
-    output1 = model(input_tensor)
-

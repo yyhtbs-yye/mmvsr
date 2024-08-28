@@ -9,7 +9,7 @@ from mmvsr.models.archs import PixelShufflePack
 from mmvsr.registry import MODELS
 
 @MODELS.register_module()
-class Type1Upsampler(BaseModule): # BasicVSR Upsampler
+class BasicVSRUpsampler(BaseModule): # BasicVSR Upsampler
     def __init__(self, in_channels, mid_channels=64):
 
         super().__init__()

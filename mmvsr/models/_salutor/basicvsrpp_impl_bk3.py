@@ -9,7 +9,7 @@ from mmvsr.registry import MODELS
 from mmvsr.models._motion_estimator.spynet import  SPyNet
 from mmvsr.models._temporal_propagator.first_order_recurrent import FirstOrderRecurrentPropagator, ResidualBlocksWithInputConv, Alignment
 from mmvsr.models._temporal_propagator.first_order_recurrent import FirstOrderRecurrentPropagator, ResidualBlocksWithInputConv, Alignment
-from mmvsr.models._upsampler.conv2d import Type1Upsampler
+from mmvsr.models._upsampler.conv_module import Type1Upsampler
 
 from mmvsr.models.archs import PixelShufflePack, ResidualBlockNoBN
 
