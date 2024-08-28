@@ -22,8 +22,6 @@ class FirstOrderBidirectionalSlidingWindowPropagator(BaseModule):
         self.fextor_def = fextor_def
         if fextor_def:
             self.fextor = fextor_def(**fextor_args)
-        else:           # Fallback: Simply aggregate fwd, now, bwd aligned frames. 
-            self.fextor = nn.Conv2d(3*mid_channels, mid_channels, kernel_size=1)
 
         self.warper_def = warper_def
         if warper_def:  # This enables 1) no pre warp, 2) patch/block warp
@@ -75,7 +73,7 @@ class FirstOrderBidirectionalSlidingWindowPropagator(BaseModule):
             if self.aligner_def:
                 align_feat = self.aligner(feat, torch.cat([cond, now_feat], dim=C_DIM), [fwd_flow, bwd_flow])
             else:               # In the case there is no refined alignment
-                align_feat = cond
+                align_feat = (fwd_cond + bwd_cond + now_feat) / 3
 
             # Feature Extraction: ``cat_feat`` contains refined aligned features and data from previous layers
             if self.fextor_def:
@@ -83,8 +81,7 @@ class FirstOrderBidirectionalSlidingWindowPropagator(BaseModule):
                                       *[it[:, i, ...] for it in dense_feats]], dim=C_DIM)
                 prop_feat = self.fextor(cat_feat)
             else:               # In the case there is no feature extraction, use aggregation instead
-                cat_feat = torch.cat([now_feat, fwd_feat, bwd_feat], dim=C_DIM)
-                prop_feat = self.fextor(cat_feat)
+                prop_feat = (now_feat + align_feat) / 2
 
             out_feats.append(prop_feat)
 
@@ -107,8 +104,6 @@ class FirstOrderUnidirectionalSlidingWindowPropagator(BaseModule):
         self.fextor_def = fextor_def
         if fextor_def:
             self.fextor = fextor_def(**fextor_args)
-        else:           # Fallback: Simply aggregate fwd and now aligned frames. 
-            self.fextor = nn.Conv2d(2*mid_channels, mid_channels, kernel_size=1)
 
         self.warper_def = warper_def
         if warper_def:  # This enables 1) no pre warp, 2) patch/block warp
@@ -146,15 +141,14 @@ class FirstOrderUnidirectionalSlidingWindowPropagator(BaseModule):
             if self.aligner_def:
                 align_feat = self.aligner(fwd_feat, torch.cat([cond, now_feat], dim=C_DIM), [fwd_flow])
             else:
-                align_feat = cond
+                align_feat = (cond + now_feat) / 2
 
             if self.fextor_def:
                 cat_feat = torch.cat([now_feat, align_feat,
                                       *[it[:, i, ...] for it in dense_feats]], dim=C_DIM)
                 prop_feat = self.fextor(cat_feat)
             else: # Fallback, 1x1 conv2d to aggregate, no dense connections from previous layers
-                cat_feat = torch.cat([now_feat, align_feat], dim=C_DIM)
-                prop_feat = self.fextor(cat_feat)
+                prop_feat = (now_feat + align_feat) / 2
 
             out_feats.append(prop_feat)
 
@@ -179,9 +173,12 @@ class SecondOrderUnidirectionalSlidingWindowPropagator(BaseModule):
         if aligner_def:
             self.aligner = aligner_def(**aligner_args)
 
-        # Function definitions or classes to create fextor and warper
-        self.fextor = fextor_def(**fextor_args)
+        self.fextor_def = fextor_def
+        if fextor_def:
+            self.fextor = fextor_def(**fextor_args)
+
         self.warper = Warper()
+
         self.easy_indices = list(range(-1, -n_frames - 1, -1)) \
                                 if self.is_reversed \
                                     else list(range(n_frames))
@@ -214,16 +211,20 @@ class SecondOrderUnidirectionalSlidingWindowPropagator(BaseModule):
                     n2_feat = in_feats[:, self.easy_indices[i - 2], ...]
                     n2_cond = self.warper(n2_feat, n2_flow.permute(0, 2, 3, 1))
 
-            n12c_cond = torch.cat([n1_cond, n2_cond, now_feat], dim=1)
-            n12_feat = torch.cat([n1_feat, n2_feat], dim=1)
+            conds = torch.cat([n1_cond, n2_cond, now_feat], dim=1)
+            feats = torch.cat([n1_feat, n2_feat], dim=1)
 
             if self.aligner_def:
-                align_feat = self.aligner(n12_feat, n12c_cond, [n1_flow, n2_flow])
+                align_feat = self.aligner(feats, conds, [n1_flow, n2_flow])
             else:
-                align_feat = torch.cat([n1_cond, n2_cond], dim=1)
+                align_feat = (n1_cond + n2_cond + now_feat) / 3
 
             cat_feat = torch.cat([now_feat, align_feat, *[it[:, self.easy_indices[i], ...] for it in dense_feats]], dim=C_DIM)
-            prop_feat = self.fextor(cat_feat)
+
+            if self.fextor_def:
+                prop_feat = self.fextor(cat_feat)
+            else:
+                prop_feat = (now_feat + align_feat) / 2
 
             out_feats.append(prop_feat.clone())
 
@@ -248,8 +249,6 @@ class AnyOrderBidirectionalFullyConnectedPropagator(BaseModule):
         self.fextor_def = fextor_def
         if fextor_def:
             self.fextor = fextor_def(**fextor_args)
-        else:           
-            self.fextor = nn.Conv2d(2*mid_channels, mid_channels, kernel_size=1)
 
         self.warper_def = warper_def
         if warper_def:  
@@ -293,7 +292,7 @@ class AnyOrderBidirectionalFullyConnectedPropagator(BaseModule):
                                           torch.cat([*conds, now_feat], dim=C_DIM), 
                                           flows)
             else:
-                align_feat = torch.cat(conds, dim=C_DIM)
+                align_feat = torch.mean(torch.stack([*conds, now_feat], dim=0), dim=0)
 
             # Feature Extraction
             if self.fextor_def:
@@ -301,8 +300,7 @@ class AnyOrderBidirectionalFullyConnectedPropagator(BaseModule):
                                       *[it[:, i, ...] for it in dense_feats]], dim=C_DIM)
                 prop_feat = self.fextor(cat_feat)
             else:
-                cat_feat = torch.cat([now_feat, align_feat], dim=C_DIM)
-                prop_feat = self.fextor(cat_feat)
+                prop_feat = (now_feat + align_feat) / 2
 
             out_feats.append(prop_feat)
 
