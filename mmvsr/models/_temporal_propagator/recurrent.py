@@ -148,7 +148,7 @@ class FirstOrderUnidirectionalRecurrentPropagator(BaseModule):
             if i > 0:
                 od1_flow = flows[:, self.easy_indices[i - 1], ...]
                 od1_cond = self.warper(prop_feat, od1_flow.permute(0, 2, 3, 1))
-                
+
             cond = torch.cat([od1_cond, now_feat], dim=1)
 
             if self.aligner_def:
