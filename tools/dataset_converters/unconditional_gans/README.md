@@ -66,7 +66,7 @@ train_dataloader = dict(
 ```
 
 In this dataset, you should provide a dictionary of image paths to the `data_roots`. Thus, you should resize the images in the dataset in advance.
-For the resizing methods in the data pre-processing, we adopt bilinear interpolation methods in all of the experiments studied in mmvsr.
+For the resizing methods in the data pre-processing, we adopt bilinear interpolation methods in all of the experiments studied in src.
 
 Note that this dataset should be used with `PGGANFetchDataHook`. In this config file, this hook should be added in the customized hooks, as shown below.
 

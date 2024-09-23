@@ -55,10 +55,10 @@ pip install opencv-python-headless
 ```
 
 **Step 2.**
-Install mmvsr.
+Install src.
 
 ```shell
-git clone https://github.com/open-mmlab/mmvsr.git
+git clone https://github.com/open-mmlab/src.git
 ```
 
 **Step 3.**

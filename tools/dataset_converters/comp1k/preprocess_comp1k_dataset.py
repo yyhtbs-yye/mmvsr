@@ -9,7 +9,7 @@ import mmengine
 import numpy as np
 from PIL import Image
 
-from mmvsr.utils import modify_args
+from src.utils import modify_args
 
 
 def fix_png_files(directory):

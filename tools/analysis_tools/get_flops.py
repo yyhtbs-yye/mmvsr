@@ -5,7 +5,7 @@ import torch
 from mmengine import Config
 from mmengine.registry import init_default_scope
 
-from mmvsr.registry import MODELS
+from src.registry import MODELS
 
 try:
     from mmengine.analysis import get_model_complexity_info

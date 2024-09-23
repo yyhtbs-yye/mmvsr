@@ -14,8 +14,8 @@ import numpy as np
 from skimage import img_as_float
 from skimage.io import imread, imsave
 
-from mmvsr.datasets.transforms import MATLABLikeResize, blur_kernels
-from mmvsr.utils import modify_args
+from src.datasets.transforms import MATLABLikeResize, blur_kernels
+from src.utils import modify_args
 
 
 def make_lmdb(mode,
