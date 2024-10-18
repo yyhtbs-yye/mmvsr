@@ -27,7 +27,7 @@ class BasicVSRPlusPlusImpl(BaseModule):
         self.backward_propagator = FirstOrderRecurrentPropagator(mid_channels, is_reversed=True)
         self.forward_propagator = FirstOrderRecurrentPropagator(mid_channels)
 
-        self.aligner = Alignment()
+        self.refiner = Alignment()
         self.backward_resblocks = ResidualBlocksWithInputConv(
             mid_channels + 3, mid_channels, num_blocks)
         self.forward_resblocks = ResidualBlocksWithInputConv(
@@ -80,7 +80,7 @@ class BasicVSRPlusPlusImpl(BaseModule):
         # for i in range(t):
         #     if i > 0:  # no warping required for the last timestep
         #         flow = backward_flows[:, feat_indices[i - 1], :, :, :]
-        #         feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
+        #         feat_prop = self.refiner(feat_prop, flow.permute(0, 2, 3, 1))
 
         #     feat_prop = torch.cat([lrs[:, feat_indices[i], :, :, :], feat_prop], dim=1)
         #     feat_prop = self.backward_resblocks(feat_prop)
@@ -95,7 +95,7 @@ class BasicVSRPlusPlusImpl(BaseModule):
         # for i in range(t):
         #     if i > 0:  # no warping required for the first timestep
         #         flow = forward_flows[:, feat_indices[i - 1], :, :, :]
-        #         feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
+        #         feat_prop = self.refiner(feat_prop, flow.permute(0, 2, 3, 1))
 
         #     feat_prop = torch.cat([lrs[:, feat_indices[i], :, :, :], feat_prop], dim=1)
         #     feat_prop = self.forward_resblocks(feat_prop)

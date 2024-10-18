@@ -8,7 +8,7 @@ from mmvsr.registry import MODELS
 
 from mmvsr.models._motion_estimator.spynet import  SPyNet
 
-from mmvsr.models._aligner.fgd_aligner import AnyOrderDeformableAlignment as Aligner
+from mmvsr.models._refiner.fgd_refiner import AnyOrderDeformableAlignment as refiner
 from mmvsr.models._feature_extractor.conv_module import ResidualBlocksWithInputConv as Extractor
 from mmvsr.models._temporal_propagator.feedforward import FirstOrderUnidirectionalSlidingWindowPropagator as Propagator
 from mmvsr.models._upsampler.conv_module import BasicVSRUpsampler
@@ -31,22 +31,22 @@ class BillVSRImpl(BaseModule):
         self.fextor_l3_args = dict(in_channels=4*mid_channels, out_channels=mid_channels, num_blocks=num_blocks)
         self.fextor_l4_args = dict(in_channels=5*mid_channels, out_channels=mid_channels, num_blocks=num_blocks)
 
-        self.aligner_args = dict(in_channels=mid_channels, out_channels=mid_channels, 
+        self.refiner_args = dict(in_channels=mid_channels, out_channels=mid_channels, 
                                  kernel_size=3, padding=1, deform_groups=16,
                                  max_residue_magnitude=max_residue_magnitude, order=1)
 
         self.propagator_l1 = Propagator(mid_channels=mid_channels, 
                                         fextor_def=Extractor, fextor_args=self.fextor_l1_args,
-                                        aligner_def=Aligner, aligner_args=self.aligner_args)
+                                        refiner_def=refiner, refiner_args=self.refiner_args)
         self.propagator_l2 = Propagator(mid_channels=mid_channels, 
                                         fextor_def=Extractor, fextor_args=self.fextor_l2_args,
-                                        aligner_def=Aligner, aligner_args=self.aligner_args)
+                                        refiner_def=refiner, refiner_args=self.refiner_args)
         self.propagator_l3 = Propagator(mid_channels=mid_channels, 
                                         fextor_def=Extractor, fextor_args=self.fextor_l3_args,
-                                        aligner_def=Aligner, aligner_args=self.aligner_args)
+                                        refiner_def=refiner, refiner_args=self.refiner_args)
         self.propagator_l4 = Propagator(mid_channels=mid_channels, 
                                         fextor_def=Extractor, fextor_args=self.fextor_l4_args,
-                                        aligner_def=Aligner, aligner_args=self.aligner_args)
+                                        refiner_def=refiner, refiner_args=self.refiner_args)
 
         self.upsample = BasicVSRUpsampler(in_channels=5*mid_channels, mid_channels=64)
 

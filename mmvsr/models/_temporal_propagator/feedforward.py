@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from mmengine.model import BaseModule
 from mmvsr.registry import MODELS
-from mmvsr.models._aligner.warper import Warper
+from mmvsr.models._refiner.warper import Warper
 
 C_DIM = -3
 
@@ -12,7 +12,7 @@ class FirstOrderBidirectionalSlidingWindowPropagator(BaseModule):
 
     def __init__(self, mid_channels=64, n_frames=7,
                  warper_def=None, warper_args=None,
-                 aligner_def=None, aligner_args=None,
+                 refiner_def=None, refiner_args=None,
                  fextor_def=None, fextor_args=None):
 
         super().__init__()
@@ -29,10 +29,10 @@ class FirstOrderBidirectionalSlidingWindowPropagator(BaseModule):
         else:
             self.warper = Warper()
 
-        self.aligner_def = aligner_def
+        self.refiner_def = refiner_def
 
-        if aligner_def:
-            self.aligner = aligner_def(**aligner_args)
+        if refiner_def:
+            self.refiner = refiner_def(**refiner_args)
         
     def forward(self, in_feats, flows, dense_feats=None):
 
@@ -70,8 +70,8 @@ class FirstOrderBidirectionalSlidingWindowPropagator(BaseModule):
             cond = torch.cat([fwd_cond, bwd_cond], dim=C_DIM)
 
             # Refined Alignment:  ``fwd_feat`` and ``bwd_feat`` are refined aligned features
-            if self.aligner_def:
-                align_feat = self.aligner(feat, torch.cat([cond, now_feat], dim=C_DIM), [fwd_flow, bwd_flow])
+            if self.refiner_def:
+                align_feat = self.refiner(feat, torch.cat([cond, now_feat], dim=C_DIM), [fwd_flow, bwd_flow])
             else:               # In the case there is no refined alignment
                 align_feat = (fwd_cond + bwd_cond + now_feat) / 3
 
@@ -92,7 +92,7 @@ class FirstOrderUnidirectionalSlidingWindowPropagator(BaseModule):
 
     def __init__(self, mid_channels=64, n_frames=7,
                  warper_def=None, warper_args=None,
-                 aligner_def=None, aligner_args=None,
+                 refiner_def=None, refiner_args=None,
                  fextor_def=None, fextor_args=None,
                  is_reversed=False):
 
@@ -111,9 +111,9 @@ class FirstOrderUnidirectionalSlidingWindowPropagator(BaseModule):
         else:
             self.warper = Warper()
 
-        self.aligner_def = aligner_def
-        if aligner_def:
-            self.aligner = aligner_def(**aligner_args)
+        self.refiner_def = refiner_def
+        if refiner_def:
+            self.refiner = refiner_def(**refiner_args)
 
         self.easy_indices = list(range(-1, -n_frames - 1, -1)) \
                                 if self.is_reversed \
@@ -138,8 +138,8 @@ class FirstOrderUnidirectionalSlidingWindowPropagator(BaseModule):
 
             cond = self.warper(fwd_feat, fwd_flow.permute(0, 2, 3, 1))
 
-            if self.aligner_def:
-                align_feat = self.aligner(fwd_feat, torch.cat([cond, now_feat], dim=C_DIM), [fwd_flow])
+            if self.refiner_def:
+                align_feat = self.refiner(fwd_feat, torch.cat([cond, now_feat], dim=C_DIM), [fwd_flow])
             else:
                 align_feat = (cond + now_feat) / 2
 
@@ -159,7 +159,7 @@ class SecondOrderUnidirectionalSlidingWindowPropagator(BaseModule):
     
     def __init__(self, mid_channels=64, n_frames=7,
                  fextor_def=None, fextor_args=None,
-                 aligner_def=None, aligner_args=None, 
+                 refiner_def=None, refiner_args=None, 
                  is_reversed=False):
 
         super().__init__()
@@ -168,10 +168,10 @@ class SecondOrderUnidirectionalSlidingWindowPropagator(BaseModule):
 
         self.is_reversed = is_reversed
 
-        self.aligner_def = aligner_def
+        self.refiner_def = refiner_def
 
-        if aligner_def:
-            self.aligner = aligner_def(**aligner_args)
+        if refiner_def:
+            self.refiner = refiner_def(**refiner_args)
 
         self.fextor_def = fextor_def
         if fextor_def:
@@ -214,8 +214,8 @@ class SecondOrderUnidirectionalSlidingWindowPropagator(BaseModule):
             conds = torch.cat([n1_cond, n2_cond, now_feat], dim=1)
             feats = torch.cat([n1_feat, n2_feat], dim=1)
 
-            if self.aligner_def:
-                align_feat = self.aligner(feats, conds, [n1_flow, n2_flow])
+            if self.refiner_def:
+                align_feat = self.refiner(feats, conds, [n1_flow, n2_flow])
             else:
                 align_feat = (n1_cond + n2_cond + now_feat) / 3
 
@@ -239,7 +239,7 @@ class AnyOrderBidirectionalFullyConnectedPropagator(BaseModule):
 
     def __init__(self, mid_channels=64, n_frames=7,
                  warper_def=None, warper_args=None,
-                 aligner_def=None, aligner_args=None,
+                 refiner_def=None, refiner_args=None,
                  fextor_def=None, fextor_args=None,):
 
         super().__init__()
@@ -256,9 +256,9 @@ class AnyOrderBidirectionalFullyConnectedPropagator(BaseModule):
         else:
             self.warper = Warper()
 
-        self.aligner_def = aligner_def
-        if aligner_def:
-            self.aligner = aligner_def(**aligner_args)
+        self.refiner_def = refiner_def
+        if refiner_def:
+            self.refiner = refiner_def(**refiner_args)
 
     def forward(self, in_feats, matrix_flows, dense_feats=None):
 
@@ -286,9 +286,9 @@ class AnyOrderBidirectionalFullyConnectedPropagator(BaseModule):
                 flows.append(flow)
                 feats.append(feat)
 
-            # Refine features using aligner if available
-            if self.aligner_def:
-                align_feat = self.aligner(torch.cat(feats, dim=C_DIM), 
+            # Refine features using refiner if available
+            if self.refiner_def:
+                align_feat = self.refiner(torch.cat(feats, dim=C_DIM), 
                                           torch.cat([*conds, now_feat], dim=C_DIM), 
                                           flows)
             else:

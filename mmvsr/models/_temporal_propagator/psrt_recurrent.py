@@ -8,14 +8,16 @@ from mmvsr.models.archs import ResidualBlockNoBN
 from mmvsr.models.utils import flow_warp, make_layer
 from mmvsr.registry import MODELS
 
+import einops
+
 C_DIM = -3
 
 @MODELS.register_module()
-class SecondOrderRecurrentPropagator(BaseModule):
+class PSRTRecurrentPropagator(BaseModule):
     
     def __init__(self, mid_channels=64, n_frames=7,
                  fextor_def=None, fextor_args=None,
-                 refiner_def=None, refiner_args=None, 
+                 warper_def=None, warper_args=None,
                  is_reversed=False):
 
         super().__init__()
@@ -25,16 +27,15 @@ class SecondOrderRecurrentPropagator(BaseModule):
         self.is_reversed = is_reversed
 
         if fextor_def is None:
-            fextor_def = ResidualBlocksWithInputConv
-            fextor_args = dict(in_channels=mid_channels+3, out_channels=mid_channels, num_blocks=30)
-        if refiner_def is None:
-            refiner_def = SecondOrderrefiner
-            refiner_args = dict()
+            self.fextor = ResidualBlocksWithInputConv(in_channels=mid_channels+3, out_channels=mid_channels, num_blocks=30)
+        else:        
+            self.fextor = fextor_def(**fextor_args)
 
-        # Function definitions or classes to create fextor and warper
-        self.fextor = fextor_def(**fextor_args)
-        self.warper = Warper()
-        self.refiner = refiner_def(**refiner_args)
+        if warper_def is None:
+            self.warper = Warper()
+        else: 
+            self.warper = warper_def(**warper_args)        
+        
         self.feat_indices = list(range(-1, -n_frames - 1, -1)) \
                                 if self.is_reversed \
                                     else list(range(n_frames))
@@ -45,12 +46,13 @@ class SecondOrderRecurrentPropagator(BaseModule):
 
         out_feats = list()
         prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
-        align_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
-        n1_feat = prop_feat
 
         for i in range(0, t):
             
             curr_feat = curr_feats[:, self.feat_indices[i], ...]
+            n1_cond = curr_feat
+            n2_cond = curr_feat
+
             if i > 0:
                 n1_flow = flows[:, self.feat_indices[i - 1], ...]
                 n1_cond = self.warper(prop_feat, n1_flow.permute(0, 2, 3, 1))
@@ -65,17 +67,8 @@ class SecondOrderRecurrentPropagator(BaseModule):
                     n2_feat = out_feats[-2] # The position of 'n-2' to match 'n'
                     n2_cond = self.warper(n2_feat, n2_flow.permute(0, 2, 3, 1))
 
-                # Concatenate conditions for deformable convolution.
-                n12c_cond = torch.cat([n1_cond, curr_feat, n2_cond], dim=1)
-                # Concatenate features for deformable convolution.
-                n12_feat = torch.cat([n1_feat, n2_feat], dim=1)
-                # Use deformable convolution to refine the offset (coarse='n1_flow','n2_flow'),
-                # then apply it to align 'prop_feat'
-                align_feat = self.refiner(n12_feat, n12c_cond, [n1_flow, n2_flow])
-
-            # DenseNet: Concatenate the current frame's features with those propagated from all previous layers.
-            cat_feat = torch.cat([curr_feat, align_feat, *[it[:, self.feat_indices[i], ...] for it in prev_feats]], dim=C_DIM)
-            prop_feat = self.fextor(cat_feat)
+            cat_feat = torch.stack([curr_feat, n1_cond, n2_cond], dim=1)
+            prop_feat = self.fextor(cat_feat) + curr_feat
 
             out_feats.append(prop_feat.clone())
 
@@ -83,15 +76,6 @@ class SecondOrderRecurrentPropagator(BaseModule):
             out_feats = out_feats[::-1]
 
         return torch.stack(out_feats, dim=1)
-
-
-class SecondOrderrefiner(BaseModule):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, unalign_feat, rough_aligned_feat, n12_flow):
-        return rough_aligned_feat
-
 
 class Warper(BaseModule):
     def __init__(self):
@@ -102,14 +86,26 @@ class Warper(BaseModule):
 
 class ResidualBlocksWithInputConv(BaseModule):
 
-    def __init__(self, in_channels, out_channels=64, num_blocks=30):
+    def __init__(self, in_channels, out_channels=64, num_blocks=30, ndim=4):
         super().__init__()
 
-        self.main = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 3, 1, 1, bias=True),
-            nn.LeakyReLU(negative_slope=0.1, inplace=True),
-            make_layer(ResidualBlockNoBN, num_blocks, mid_channels=out_channels)
-        )
+        if ndim == 4:
+            self.main = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, 1, 1, bias=True),
+                nn.LeakyReLU(negative_slope=0.1, inplace=True),
+                make_layer(ResidualBlockNoBN, num_blocks, mid_channels=out_channels)
+            )
+        elif ndim == 5: # For the case of 3 inputs frames
+            self.main = nn.Sequential(
+                nn.Conv2d(in_channels*3, out_channels, 3, 1, 1, bias=True),
+                nn.LeakyReLU(negative_slope=0.1, inplace=True),
+                make_layer(ResidualBlockNoBN, num_blocks, mid_channels=out_channels)
+            )
+
+        self.ndim = ndim
 
     def forward(self, feat):
+        if self.ndim == 5:
+            feat = einops.rearrange(feat, 'b t c h w -> b (t c) h w')
+
         return self.main(feat)

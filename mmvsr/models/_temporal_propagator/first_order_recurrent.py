@@ -14,7 +14,7 @@ C_DIM = -3
 class FirstOrderRecurrentPropagator(BaseModule):
     
     def __init__(self, mid_channels=64, n_frames=7,
-                 fextor_def=None, aligner_def=None,
+                 fextor_def=None, refiner_def=None,
                  fextor_args=None,
                  is_reversed=False):
 
@@ -27,12 +27,12 @@ class FirstOrderRecurrentPropagator(BaseModule):
         if fextor_def is None:
             fextor_def = ResidualBlocksWithInputConv
             fextor_args = dict(in_channels=mid_channels+3, out_channels=mid_channels, num_blocks=30)
-        if aligner_def is None:
-            aligner_def = Alignment
+        if refiner_def is None:
+            refiner_def = Alignment
 
-        # Function definitions or classes to create fextor and aligner
+        # Function definitions or classes to create fextor and refiner
         self.fextor = fextor_def(**fextor_args)
-        self.aligner = aligner_def()
+        self.refiner = refiner_def()
         self.feat_indices = list(range(-1, -n_frames - 1, -1)) \
                                 if self.is_reversed \
                                     else list(range(n_frames))
@@ -48,7 +48,7 @@ class FirstOrderRecurrentPropagator(BaseModule):
             curr_feat = curr_feats[:, self.feat_indices[i], :, :, :]
             if i > 0:
                 flow = flows[:, self.feat_indices[i - 1], :, :, :]
-                feat_prop = self.aligner(feat_prop, flow.permute(0, 2, 3, 1))
+                feat_prop = self.refiner(feat_prop, flow.permute(0, 2, 3, 1))
 
             feat_prop = torch.cat([curr_feat, feat_prop, *[it[:, self.feat_indices[i], :, :, :] 
                                                                 for it in prev_feats]], dim=C_DIM)

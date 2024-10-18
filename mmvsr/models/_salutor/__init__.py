@@ -6,8 +6,9 @@ from .billvsr_impl import BillVSRImpl
 from .benvsr_impl import BenVSRImpl
 from .borisvsr_impl import BorisVSRImpl
 from .basicvsrplus_impl import BasicVSRPlusImpl
+from .psrt_simple_impl import PSRTSimpleImpl
 
 __all__ = [
     'BasicVSRImpl', 'BasicVSRPlusPlusImpl', 'BaselineVSRPlusPlusImpl', 'BobVSRImpl', 'BillVSRImpl', 'BenVSRImpl', 
-    'BorisVSRImpl', 'BasicVSRPlusImpl',
+    'BorisVSRImpl', 'BasicVSRPlusImpl', 'PSRTSimpleImpl', 
 ]

@@ -21,8 +21,8 @@ class BaselineVSRPlusPlusImpl(BaseModule):
         self.mid_channels = mid_channels
         self.num_blocks = num_blocks
 
-        aligner_def = SecondOrderDeformableAlignment
-        aligner_args = dict(in_channels=2*mid_channels, out_channels=mid_channels, 
+        refiner_def = SecondOrderDeformableAlignment
+        refiner_args = dict(in_channels=2*mid_channels, out_channels=mid_channels, 
                                 kernel_size=3, padding=1, deform_groups=16,
                                 max_residue_magnitude=max_residue_magnitude)
         
@@ -36,25 +36,25 @@ class BaselineVSRPlusPlusImpl(BaseModule):
 
         # Sliding Window Propagators
         self.backward_propagator1 = SecondOrderWindowPropagator(mid_channels, 
-                                                                aligner_def=aligner_def,
-                                                                aligner_args=aligner_args,
+                                                                refiner_def=refiner_def,
+                                                                refiner_args=refiner_args,
                                                                 fextor_def=fextor_def,
                                                                 fextor_args=fextor_args_b1,
                                                                 is_reversed=True)
         self.forward_propagator1  = SecondOrderWindowPropagator(mid_channels, 
-                                                                aligner_def=aligner_def,
-                                                                aligner_args=aligner_args,
+                                                                refiner_def=refiner_def,
+                                                                refiner_args=refiner_args,
                                                                 fextor_def=fextor_def,
                                                                 fextor_args=fextor_args_f1,)
         self.backward_propagator2 = SecondOrderWindowPropagator(mid_channels, 
-                                                                aligner_def=aligner_def,
-                                                                aligner_args=aligner_args,
+                                                                refiner_def=refiner_def,
+                                                                refiner_args=refiner_args,
                                                                 fextor_def=fextor_def,
                                                                 fextor_args=fextor_args_b2,
                                                                 is_reversed=True)
         self.forward_propagator2  = SecondOrderWindowPropagator(mid_channels, 
-                                                                aligner_def=aligner_def,
-                                                                aligner_args=aligner_args,
+                                                                refiner_def=refiner_def,
+                                                                refiner_args=refiner_args,
                                                                 fextor_def=fextor_def,
                                                                 fextor_args=fextor_args_f2,)
 

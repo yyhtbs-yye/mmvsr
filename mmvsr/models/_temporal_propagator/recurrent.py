@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from mmengine.model import BaseModule
 from mmvsr.registry import MODELS
-from mmvsr.models._aligner.warper import Warper
+from mmvsr.models._refiner.warper import Warper
 
 
 C_DIM = -3
@@ -14,7 +14,7 @@ class SecondOrderUnidirectionalRecurrentPropagator(BaseModule):
     
     def __init__(self, mid_channels=64, n_frames=7,
                  warper_def=None, warper_args=None,
-                 aligner_def=None, aligner_args=None,
+                 refiner_def=None, refiner_args=None,
                  fextor_def=None, fextor_args=None,
                  is_reversed=False):
 
@@ -33,9 +33,9 @@ class SecondOrderUnidirectionalRecurrentPropagator(BaseModule):
         else:
             self.warper = Warper()
 
-        self.aligner_def = aligner_def
-        if aligner_def:
-            self.aligner = aligner_def(**aligner_args)
+        self.refiner_def = refiner_def
+        if refiner_def:
+            self.refiner = refiner_def(**refiner_args)
 
         self.easy_indices = list(range(-1, -n_frames - 1, -1)) \
                                 if self.is_reversed \
@@ -77,8 +77,8 @@ class SecondOrderUnidirectionalRecurrentPropagator(BaseModule):
             # Use deformable convolution to refine the offset (coarse='od1_flow','od2_flow'),
             # then apply it to align 'prop_feat'
             # Refined Alignment:  ``fwd_feat`` and ``bwd_feat`` are refined aligned features
-            if self.aligner_def:
-                align_feat = self.aligner(feat, cond, [od1_flow, od2_flow])
+            if self.refiner_def:
+                align_feat = self.refiner(feat, cond, [od1_flow, od2_flow])
             else:               # In the case there is no refined alignment
                 align_feat = (od1_cond + od2_cond + now_feat) / 3
 
@@ -102,7 +102,7 @@ class FirstOrderUnidirectionalRecurrentPropagator(BaseModule):
     
     def __init__(self, mid_channels=64, n_frames=7,
                  warper_def=None, warper_args=None,
-                 aligner_def=None, aligner_args=None,
+                 refiner_def=None, refiner_args=None,
                  fextor_def=None, fextor_args=None,
                  is_reversed=False):
 
@@ -121,9 +121,9 @@ class FirstOrderUnidirectionalRecurrentPropagator(BaseModule):
         else:
             self.warper = Warper()
 
-        self.aligner_def = aligner_def
-        if aligner_def:
-            self.aligner = aligner_def(**aligner_args)
+        self.refiner_def = refiner_def
+        if refiner_def:
+            self.refiner = refiner_def(**refiner_args)
 
         self.easy_indices = list(range(-1, -n_frames - 1, -1)) \
                                 if self.is_reversed \
@@ -151,8 +151,8 @@ class FirstOrderUnidirectionalRecurrentPropagator(BaseModule):
 
             cond = torch.cat([od1_cond, now_feat], dim=1)
 
-            if self.aligner_def:
-                align_feat = self.aligner(prop_feat, cond, [od1_flow])
+            if self.refiner_def:
+                align_feat = self.refiner(prop_feat, cond, [od1_flow])
             else:               # In the case there is no refined alignment
                 align_feat = (od1_cond + now_feat) / 2
 

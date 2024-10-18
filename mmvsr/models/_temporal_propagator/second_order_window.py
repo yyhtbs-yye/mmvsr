@@ -15,7 +15,7 @@ class SecondOrderWindowPropagator(BaseModule):
     
     def __init__(self, mid_channels=64, n_frames=7,
                  fextor_def=None, fextor_args=None,
-                 aligner_def=None, aligner_args=None, 
+                 refiner_def=None, refiner_args=None, 
                  is_reversed=False):
 
         super().__init__()
@@ -27,14 +27,14 @@ class SecondOrderWindowPropagator(BaseModule):
         if fextor_def is None:
             fextor_def = ResidualBlocksWithInputConv
             fextor_args = dict(in_channels=mid_channels+3, out_channels=mid_channels, num_blocks=30)
-        if aligner_def is None:
-            aligner_def = SecondOrderAligner
-            aligner_args = dict()
+        if refiner_def is None:
+            refiner_def = SecondOrderrefiner
+            refiner_args = dict()
 
         # Function definitions or classes to create fextor and warper
         self.fextor = fextor_def(**fextor_args)
         self.warper = Warper()
-        self.aligner = aligner_def(**aligner_args)
+        self.refiner = refiner_def(**refiner_args)
         self.feat_indices = list(range(-1, -n_frames - 1, -1)) \
                                 if self.is_reversed \
                                     else list(range(n_frames))
@@ -71,7 +71,7 @@ class SecondOrderWindowPropagator(BaseModule):
 
             n12c_cond = torch.cat([n1_cond, n2_cond, curr_feat], dim=1)
             n12_feat = torch.cat([n1_feat, n2_feat], dim=1)
-            align_feat = self.aligner(n12_feat, n12c_cond, [n1_flow, n2_flow])
+            align_feat = self.refiner(n12_feat, n12c_cond, [n1_flow, n2_flow])
             cat_feat = torch.cat([curr_feat, align_feat, *[it[:, self.feat_indices[i], ...] for it in prev_feats]], dim=C_DIM)
             prop_feat = self.fextor(cat_feat)
 
@@ -82,7 +82,7 @@ class SecondOrderWindowPropagator(BaseModule):
 
         return torch.stack(out_feats, dim=1)
 
-class SecondOrderAligner(BaseModule):
+class SecondOrderrefiner(BaseModule):
     def __init__(self):
         super().__init__()
 
