@@ -40,12 +40,15 @@ class PSRTRecurrentPropagator(BaseModule):
                                 if self.is_reversed \
                                     else list(range(n_frames))
 
-    def forward(self, curr_feats, flows, prev_feats=[]):
+    def forward(self, curr_feats, flows, prev_feats=None):
 
         n, t, c, h, w = curr_feats.size()
 
         out_feats = list()
-        prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
+        if prev_feats:
+            prop_feat = prev_feats
+        else:
+            prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
 
         for i in range(0, t):
             
