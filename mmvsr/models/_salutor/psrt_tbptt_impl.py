@@ -7,7 +7,7 @@ from mmengine.model import BaseModule
 from mmvsr.registry import MODELS
 
 from mmvsr.models._motion_estimator.spynet import  SPyNet
-from mmvsr.models._temporal_propagator.psrt_recurrent_old import PSRTRecurrentPropagator, ResidualBlocksWithInputConv
+from mmvsr.models._temporal_propagator.psrt_recurrent import PSRTRecurrentPropagator, ResidualBlocksWithInputConv
 from mmvsr.models.archs import PixelShufflePack
 
 @MODELS.register_module()
