@@ -41,6 +41,10 @@ class PSRTRecurrentPropagator(BaseModule):
 
         n, t, c, h, w = curr_feats.size()
 
+        feat_indices = list(range(-1, -t - 1, -1)) \
+                                if self.is_reversed \
+                                    else list(range(t))
+
         if history_feats is not None:
             assert history_feats.shape[1] == 2 # history feature should be T=2
             assert history_flows.shape[1] == 2 # history flow should be of T=2
@@ -48,13 +52,8 @@ class PSRTRecurrentPropagator(BaseModule):
             history_flows = [history_flows[:, 0, ...], history_flows[:, 1, ...]]
         else:
             history_feats = [curr_feats[:, feat_indices[0], ...], curr_feats[:, feat_indices[0], ...]]
-            history_flows = [flows.new_zeros(n, 1, 2, h, w), flows.new_zeros(n, 1, 2, h, w)]
+            history_flows = [flows.new_zeros(n, 2, h, w), flows.new_zeros(n, 2, h, w)]
             
-        # Concate the history feat and flow to the current version
-
-        feat_indices = list(range(-1, -t - 1, -1)) \
-                                if self.is_reversed \
-                                    else list(range(t))
         out_feats = []
 
         for i in range(0, t):
@@ -71,6 +70,8 @@ class PSRTRecurrentPropagator(BaseModule):
 
             out_feats.append(o.clone())
 
+            if i == t - 1: # for the last iter, need to to update history
+                break
             # update history feats and flows
             history_feats = [history_feats[1], o]
             history_flows = [history_flows[1], flows[:, feat_indices[i], ...]]
