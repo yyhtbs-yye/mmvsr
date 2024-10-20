@@ -15,7 +15,7 @@ C_DIM = -3
 @MODELS.register_module()
 class PSRTRecurrentPropagator(BaseModule):
     
-    def __init__(self, mid_channels=64,
+    def __init__(self, mid_channels=64, n_frames=7,
                  fextor_def=None, fextor_args=None,
                  warper_def=None, warper_args=None,
                  is_reversed=False):
@@ -37,7 +37,7 @@ class PSRTRecurrentPropagator(BaseModule):
             self.warper = warper_def(**warper_args)        
         
 
-    def forward(self, curr_feats, flows, history_feats=None, history_flows=None):
+    def forward(self, curr_feats, flows, prev_feats=None):
 
         n, t, c, h, w = curr_feats.size()
 
@@ -46,46 +46,30 @@ class PSRTRecurrentPropagator(BaseModule):
                                     else list(range(t))
 
         out_feats = list()
-        if history_feats is not None:
-            prop_feat = history_feats[:, -1, ...]
-            prev_prop_feat = history_feats[:, -2, ...]
+        if prev_feats is not None:
+            prop_feat = prev_feats
         else:
             prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
-            prev_prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
-
-        if history_feats is not None: # history_flows = [-2, -1]
-            n1_flow = history_flows[:, -1, ...]
-            n1_cond = self.warper(prop_feat, n1_flow.permute(0, 2, 3, 1))
-
-            n2_flow = history_flows[:, -2, ...]
-            n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
-            n2_cond = self.warper(prev_prop_feat, n2_flow.permute(0, 2, 3, 1))
-        else:
-            n1_cond = curr_feat
-            n2_cond = curr_feat
-
 
         for i in range(0, t):
             
             curr_feat = curr_feats[:, feat_indices[i], ...]
-            
-            if i == 1:
-                n1_flow = flows[:, feat_indices[0], ...]
-                n1_cond = self.warper(prop_feat, n1_flow.permute(0, 2, 3, 1))
-                if history_feats is not None:
-                    n2_flow = history_flows[:, -1, ...]
-                    n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
-                    n2_cond = self.warper(history_feats[:, -1, ...], n2_flow.permute(0, 2, 3, 1))
-                else:
-                    n2_cond = curr_feat
+            n1_cond = curr_feat
+            n2_cond = curr_feat
 
-            elif i > 1:
+            if i > 0:
                 n1_flow = flows[:, feat_indices[i - 1], ...]
                 n1_cond = self.warper(prop_feat, n1_flow.permute(0, 2, 3, 1))
-                n2_flow = flows[:, feat_indices[i - 2], ...]
-                n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
-                n2_feat = out_feats[-2] # The position of 'n-2' to match 'n'
-                n2_cond = self.warper(n2_feat, n2_flow.permute(0, 2, 3, 1))
+                
+                n2_feat = torch.zeros_like(prop_feat)
+                n2_flow = torch.zeros_like(n1_flow)
+                n2_cond = torch.zeros_like(n1_cond)
+                if i > 1:
+                    n2_flow = flows[:, feat_indices[i - 2], :, :, :]
+                    # Compute second-order optical flow using first-order flow.
+                    n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
+                    n2_feat = out_feats[-2] # The position of 'n-2' to match 'n'
+                    n2_cond = self.warper(n2_feat, n2_flow.permute(0, 2, 3, 1))
 
             cat_feat = torch.stack([curr_feat, n1_cond, n2_cond], dim=1)
             prop_feat = self.fextor(cat_feat) + curr_feat

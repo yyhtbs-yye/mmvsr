@@ -7,7 +7,7 @@ from mmengine.model import BaseModule
 from mmvsr.registry import MODELS
 
 from mmvsr.models._motion_estimator.spynet import  SPyNet
-from mmvsr.models._temporal_propagator.psrt_recurrent import PSRTRecurrentPropagator, ResidualBlocksWithInputConv
+from mmvsr.models._temporal_propagator.psrt_recurrent_old import PSRTRecurrentPropagator, ResidualBlocksWithInputConv
 from mmvsr.models.archs import PixelShufflePack
 
 @MODELS.register_module()
@@ -29,22 +29,23 @@ class PSRTTbpttImpl(BaseModule):
         self.spatial_fextor = ResidualBlocksWithInputConv(3, mid_channels, 5)
 
         # Recurrent propagators
-        self.backward_propagator1 = PSRTRecurrentPropagator(mid_channels, n_frames=n_frames, 
-                                                                   fextor_def=fextor_def,
-                                                                   fextor_args=fextor_args_b1,
-                                                                   is_reversed=True)
-        self.forward_propagator1  = PSRTRecurrentPropagator(mid_channels, n_frames=n_frames, 
-                                                                   fextor_def=fextor_def,
-                                                                   fextor_args=fextor_args_f1,
-                                                                   )
-        self.backward_propagator2 = PSRTRecurrentPropagator(mid_channels, n_frames=n_frames, 
-                                                                   fextor_def=fextor_def,
-                                                                   fextor_args=fextor_args_b2,
-                                                                   is_reversed=True)
-        self.forward_propagator2  = PSRTRecurrentPropagator(mid_channels, n_frames=n_frames, 
-                                                                   fextor_def=fextor_def,
-                                                                   fextor_args=fextor_args_f2,
-                                                                   )
+        self.forward_propagator1  = PSRTRecurrentPropagator(mid_channels, 
+                                                            fextor_def=fextor_def,
+                                                            fextor_args=fextor_args_f1,)
+
+        self.backward_propagator1 = PSRTRecurrentPropagator(mid_channels,  
+                                                            fextor_def=fextor_def,
+                                                            fextor_args=fextor_args_b1,
+                                                            is_reversed=True)
+
+        self.forward_propagator2  = PSRTRecurrentPropagator(mid_channels, 
+                                                            fextor_def=fextor_def,
+                                                            fextor_args=fextor_args_f2,)
+
+        self.backward_propagator2 = PSRTRecurrentPropagator(mid_channels, 
+                                                            fextor_def=fextor_def,
+                                                            fextor_args=fextor_args_b2,
+                                                            is_reversed=True)
 
         # upsampling module
         self.reconstruction = ResidualBlocksWithInputConv(mid_channels, mid_channels, 5)
@@ -60,7 +61,8 @@ class PSRTTbpttImpl(BaseModule):
         # optical flow network for feature alignment
         self.spynet = SPyNet(pretrained=spynet_pretrained)
 
-        self.hidden = None
+        self.history_lrs = None
+        self.history_feats1 = None
 
     def compute_flow(self, lrs):
 
@@ -82,23 +84,33 @@ class PSRTTbpttImpl(BaseModule):
         feats_ = feats_.view(n, t, -1, h, w)
 
         # compute optical flow
-        forward_flows, backward_flows = self.compute_flow(lrs)
 
-        feats1 = self.forward_propagator1(feats_, forward_flows, self.hidden)
+        if self.history_lrs is not None:
+            forward_flows, backward_flows = self.compute_flow(torch.cat([self.history_lrs, lrs], axis=1))
+            history_forward_flows = forward_flows[:, :-t, ...]
+            forward_flows = forward_flows[:, -t:, ...]
+            backward_flows = backward_flows[:, -t:, ...]
+        else:
+            forward_flows, backward_flows = self.compute_flow(lrs)
+            history_forward_flows = None
+
+        feats1 = self.forward_propagator1(feats_, forward_flows, self.history_feats1, history_forward_flows)
         
-        self.hidden = feats1.detach()
+        # 2-Order -> record the previous 2 feats
+        self.history_feats1 = feats1[:, -2:, ...].detach()
+        self.history_lrs = lrs[:, -2:, ...].detach()
 
-        feats2 = self.backward_propagator1(feats1, backward_flows)
+        feats2 = self.backward_propagator1(feats1, backward_flows[:, -t:, ...])
 
-        feats3 = self.forward_propagator2(feats2, forward_flows)
+        feats3 = self.forward_propagator2(feats2, forward_flows[:, -t:, ...])
 
-        feats4 = self.backward_propagator2(feats3, backward_flows)
+        feats4 = self.backward_propagator2(feats3, backward_flows[:, -t:, ...])
 
         return self.upsample(lrs, feats4)
 
     def reset_hidden(self):
-        self.hidden = None 
-
+        self.history_lrs = None
+        self.history_feats1 = None
 
     def upsample(self, lrs, feats):
 
