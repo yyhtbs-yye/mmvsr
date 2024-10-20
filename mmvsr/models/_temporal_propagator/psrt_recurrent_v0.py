@@ -41,39 +41,56 @@ class PSRTRecurrentPropagator(BaseModule):
 
         n, t, c, h, w = curr_feats.size()
 
-        if history_feats is not None:
-            assert history_feats.shape[1] == 2 # history feature should be T=2
-            assert history_flows.shape[1] == 2 # history flow should be of T=2
-            history_feats = [history_feats[:, 0, ...], history_feats[:, 1, ...]]
-            history_flows = [history_flows[:, 0, ...], history_flows[:, 1, ...]]
-        else:
-            history_feats = [curr_feats[:, feat_indices[0], ...], curr_feats[:, feat_indices[0], ...]]
-            history_flows = [flows.new_zeros(n, 1, 2, h, w), flows.new_zeros(n, 1, 2, h, w)]
-            
-        # Concate the history feat and flow to the current version
-
         feat_indices = list(range(-1, -t - 1, -1)) \
                                 if self.is_reversed \
                                     else list(range(t))
-        out_feats = []
+
+        out_feats = list()
+        if history_feats is not None:
+            prop_feat = history_feats[:, -1, ...]
+            prev_prop_feat = history_feats[:, -2, ...]
+        else:
+            prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
+            prev_prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
+
+        if history_feats is not None: # history_flows = [-2, -1]
+            n1_flow = history_flows[:, -1, ...]
+            n1_cond = self.warper(prop_feat, n1_flow.permute(0, 2, 3, 1))
+
+            n2_flow = history_flows[:, -2, ...]
+            n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
+            n2_cond = self.warper(prev_prop_feat, n2_flow.permute(0, 2, 3, 1))
+        else:
+            n1_cond = curr_feats[:, feat_indices[0], ...]
+            n2_cond = curr_feats[:, feat_indices[0], ...]
+
 
         for i in range(0, t):
             
-            x = curr_feats[:, feat_indices[i], ...]
-            y2, y1 = history_feats
-            f2, f1 = history_flows
-            a1 = self.warper(y1, f1.permute(0, 2, 3, 1))
-            f2 = f1 + self.warper(f2, f1.permute(0, 2, 3, 1))
-            a2 = self.warper(y2, f2.permute(0, 2, 3, 1))
+            curr_feat = curr_feats[:, feat_indices[i], ...]
+            
+            if i == 1:
+                n1_flow = flows[:, feat_indices[0], ...]
+                n1_cond = self.warper(prop_feat, n1_flow.permute(0, 2, 3, 1))
+                if history_feats is not None:
+                    n2_flow = history_flows[:, -1, ...]
+                    n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
+                    n2_cond = self.warper(history_feats[:, -1, ...], n2_flow.permute(0, 2, 3, 1))
+                else:
+                    n2_cond = curr_feat
 
-            c = torch.stack([a2, a1, x], dim=1)
-            o = self.fextor(c) + x
+            elif i > 1:
+                n1_flow = flows[:, feat_indices[i - 1], ...]
+                n1_cond = self.warper(prop_feat, n1_flow.permute(0, 2, 3, 1))
+                n2_flow = flows[:, feat_indices[i - 2], ...]
+                n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
+                n2_feat = out_feats[-2] # The position of 'n-2' to match 'n'
+                n2_cond = self.warper(n2_feat, n2_flow.permute(0, 2, 3, 1))
 
-            out_feats.append(o.clone())
+            cat_feat = torch.stack([curr_feat, n1_cond, n2_cond], dim=1)
+            prop_feat = self.fextor(cat_feat) + curr_feat
 
-            # update history feats and flows
-            history_feats = [history_feats[1], o]
-            history_flows = [history_flows[1], flows[:, feat_indices[i], ...]]
+            out_feats.append(prop_feat.clone())
 
         if self.is_reversed:
             out_feats = out_feats[::-1]
