@@ -36,35 +36,36 @@ class PSRTRecurrentPropagator(BaseModule):
         else: 
             self.warper = warper_def(**warper_args)        
         
-        self.feat_indices = list(range(-1, -n_frames - 1, -1)) \
-                                if self.is_reversed \
-                                    else list(range(n_frames))
 
     def forward(self, curr_feats, flows, prev_feats=None):
 
         n, t, c, h, w = curr_feats.size()
 
+        feat_indices = list(range(-1, -t - 1, -1)) \
+                                if self.is_reversed \
+                                    else list(range(t))
+
         out_feats = list()
-        if prev_feats:
+        if prev_feats is not None:
             prop_feat = prev_feats
         else:
             prop_feat = curr_feats.new_zeros(n, self.mid_channels, h, w)
 
         for i in range(0, t):
             
-            curr_feat = curr_feats[:, self.feat_indices[i], ...]
+            curr_feat = curr_feats[:, feat_indices[i], ...]
             n1_cond = curr_feat
             n2_cond = curr_feat
 
             if i > 0:
-                n1_flow = flows[:, self.feat_indices[i - 1], ...]
+                n1_flow = flows[:, feat_indices[i - 1], ...]
                 n1_cond = self.warper(prop_feat, n1_flow.permute(0, 2, 3, 1))
                 
                 n2_feat = torch.zeros_like(prop_feat)
                 n2_flow = torch.zeros_like(n1_flow)
                 n2_cond = torch.zeros_like(n1_cond)
                 if i > 1:
-                    n2_flow = flows[:, self.feat_indices[i - 2], :, :, :]
+                    n2_flow = flows[:, feat_indices[i - 2], :, :, :]
                     # Compute second-order optical flow using first-order flow.
                     n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
                     n2_feat = out_feats[-2] # The position of 'n-2' to match 'n'

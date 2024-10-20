@@ -1,7 +1,7 @@
 
 import os
 
-cuda_id = 1
+cuda_id = 3
 cfg_path = "configs/n_to_n_vsr.py"
 
 model_configs = dict(type='PSRTSimpleImpl', mid_channels=64, num_blocks=30,

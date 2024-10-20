@@ -7,6 +7,8 @@ from mmvsr.registry import TRANSFORMS
 from mmvsr.structures import DataSample
 from mmvsr.utils import all_to_tensor
 
+import torch
+import torch.nn.functional as F
 
 @TRANSFORMS.register_module()
 class PackInputs(BaseTransform):

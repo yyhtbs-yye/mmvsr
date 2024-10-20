@@ -34,6 +34,8 @@ from .pcdnet import De3QNet
 
 from .naivevsr import NaiveVSR
 
+from .tbptt_vsr import TbpttVSR
+
 
 # Switch between ".vrt_refactor" and ".vrt"
 from .vrt_simple import VRTNet
@@ -43,5 +45,5 @@ __all__ = [
                     'PConvEncoderDecoder', 'PConvInpaintor', 'RDNNet', 'RealBasicVSR', 'RealBasicVSRNet', 'RealESRGAN', 'UNetDiscriminatorWithSpectralNorm', 'SRCNNNet',
                     'SRGAN', 'ModifiedVGG', 'MSRResNet', 'SwinIRNet', 'TDAN', 'TDANNet', 'TOFlowVFINet', 'TOFlowVSRNet', 'ToFResBlock',
     'VRTNet', 'NaiveVSR', 'D3DNet', 'FTVSRNet', 'IARTNet', 'PSRTRecurrentNet', 'FSTRNet', 
-    'D3DUNet', 'D2DNet', 'De3QNet', 'BaselineVSRNet', 'BisimVSRPlusPlusNet', 'BaselineVSRPlusPlusNet', 
+    'D3DUNet', 'D2DNet', 'De3QNet', 'BaselineVSRNet', 'BisimVSRPlusPlusNet', 'BaselineVSRPlusPlusNet', 'TbpttVSR',
 ]

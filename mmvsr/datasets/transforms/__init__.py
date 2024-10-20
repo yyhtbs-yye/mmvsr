@@ -49,5 +49,5 @@ __all__ = [
     'GenerateTrimapWithDistTransform', 'CompositeFg', 'RandomLoadResizeBg',
     'MergeFgAndBg', 'PerturbBg', 'RandomJitter', 'LoadPairedImageFromFile',
     'CenterCropLongEdge', 'RandomCropLongEdge', 'NumpyPad', 'InstanceCrop',
-    'Albumentations', 'AlbuCorruptFunction', 'PairedAlbuTransForms'
+    'Albumentations', 'AlbuCorruptFunction', 'PairedAlbuTransForms',
 ]
