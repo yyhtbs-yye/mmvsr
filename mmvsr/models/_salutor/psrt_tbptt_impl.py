@@ -87,9 +87,9 @@ class PSRTTbpttImpl(BaseModule):
 
         if self.history_lrs is not None:
             forward_flows, backward_flows = self.compute_flow(torch.cat([self.history_lrs, lrs], axis=1))
-            history_forward_flows = forward_flows[:, :-t, ...]
-            forward_flows = forward_flows[:, -t:, ...]
-            backward_flows = backward_flows[:, -t:, ...]
+            history_forward_flows = forward_flows[:, :2, ...]
+            forward_flows = forward_flows[:, 2:, ...]
+            backward_flows = backward_flows[:, 2:, ...]
         else:
             forward_flows, backward_flows = self.compute_flow(lrs)
             history_forward_flows = None
@@ -100,11 +100,11 @@ class PSRTTbpttImpl(BaseModule):
         self.history_feats1 = feats1[:, -2:, ...].detach()
         self.history_lrs = lrs[:, -2:, ...].detach()
 
-        feats2 = self.backward_propagator1(feats1, backward_flows[:, -t:, ...])
+        feats2 = self.backward_propagator1(feats1, backward_flows)
 
-        feats3 = self.forward_propagator2(feats2, forward_flows[:, -t:, ...])
+        feats3 = self.forward_propagator2(feats2, forward_flows)
 
-        feats4 = self.backward_propagator2(feats3, backward_flows[:, -t:, ...])
+        feats4 = self.backward_propagator2(feats3, backward_flows)
 
         return self.upsample(lrs, feats4)
 

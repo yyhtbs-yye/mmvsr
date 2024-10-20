@@ -61,8 +61,8 @@ class PSRTRecurrentPropagator(BaseModule):
             n2_flow = n1_flow + self.warper(n2_flow, n1_flow.permute(0, 2, 3, 1))
             n2_cond = self.warper(prev_prop_feat, n2_flow.permute(0, 2, 3, 1))
         else:
-            n1_cond = curr_feat
-            n2_cond = curr_feat
+            n1_cond = curr_feats[:, feat_indices[0], ...]
+            n2_cond = curr_feats[:, feat_indices[0], ...]
 
 
         for i in range(0, t):
